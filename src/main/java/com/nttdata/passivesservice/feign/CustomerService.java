@@ -4,5 +4,5 @@ import reactor.core.publisher.Mono;
 
 public interface CustomerService {
 
-  public Mono<CustomerType> getCustomerTypeById(String objectId);
+  public Mono<CustomerType> getCustomerTypeById(String customerId);
 }

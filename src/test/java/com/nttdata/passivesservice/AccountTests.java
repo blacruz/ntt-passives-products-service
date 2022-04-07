@@ -17,6 +17,8 @@ import com.nttdata.passivesservice.entity.Holder;
 import com.nttdata.passivesservice.feign.CustomerService;
 import com.nttdata.passivesservice.feign.CustomerType;
 import com.nttdata.passivesservice.service.AccountService;
+import com.nttdata.passivesservice.service.AccountType;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -36,79 +38,56 @@ class AccountTests {
   }
 
   @Test
-  void createCompanyWithPlazoFijoAccount() {
-    when(customerService.getCustomerTypeById("ee1234-554515e-re3432"))
+  void createFixedTermAccount() {
+    var customerCompanyId = "C001";
+    var customerPersonId = "N001";
+
+    when(customerService.getCustomerTypeById(customerCompanyId))
         .thenReturn(Mono.just(CustomerType.COMPANY));
 
-    var account = new Account();
-    account.setAccountNumber("3311114587123");
-    account.setState("ok");
-    account.setType("plazo fijo");
-    var holders = List.of(new Holder("ee1234-554515e-re3432", true, true));
-    account.setHolders(holders);
+    // Un cliente empresa no puede crear cuentas de plazo fijo
+    var mono = accountService.createNewAccount(customerCompanyId, AccountType.FIXED_TERM);
+    StepVerifier.create(mono).expectError(RuntimeException.class).verify();
 
-    assertThrows(RuntimeException.class, () -> {
-      accountService.save(account).block();
-    });
+    // Un cliente persona si puede crear cuentas de plazo fijo
+    var newAccountPerson =
+        accountService.createNewAccount(customerPersonId, AccountType.FIXED_TERM);
+    StepVerifier.create(newAccountPerson).verifyComplete();
   }
 
   @Test
-  void createCompanyWithAhorroAccount() {
-    when(customerService.getCustomerTypeById("ee1234-554515e-re3432"))
+  void createSavingAccount() {
+    var customerCompanyId = "C001";
+    var customerPersonId = "N001";
+
+    when(customerService.getCustomerTypeById(customerCompanyId))
         .thenReturn(Mono.just(CustomerType.COMPANY));
 
-    var account = new Account();
-    account.setAccountNumber("3311114587123");
-    account.setState("ok");
-    account.setType("ahorro");
-    var holders = List.of(new Holder("ee1234-554515e-re3432", true, true));
-    account.setHolders(holders);
+    // Un cliente empresa no puede crear cuentas de ahorros
+    var mono = accountService.createNewAccount(customerCompanyId, AccountType.SAVING);
+    StepVerifier.create(mono).expectError(RuntimeException.class).verify();
 
-    assertThrows(RuntimeException.class, () -> {
-      accountService.save(account).block();
-    });
+    // Un cliente persona si puede crear cuentas de ahorros, pero solo una cuenta
+    var newAccountPerson = accountService.createNewAccount(customerPersonId, AccountType.SAVING);
+    StepVerifier.create(newAccountPerson).verifyComplete();
   }
 
   @Test
-  void createCompanyWithSingleCorrienteAccount() {
-    when(customerService.getCustomerTypeById("ee1234-554515e-re3432"))
+  void createCurrentAccount() {
+    var customerCompanyId = "C001";
+    var customerPersonId = "N001";
+
+    when(customerService.getCustomerTypeById(customerCompanyId))
         .thenReturn(Mono.just(CustomerType.COMPANY));
 
-    var account = new Account();
-    account.setAccountNumber("3311114587123");
-    account.setState("ok");
-    account.setType("corriente");
-    var holders = List.of(new Holder("ee1234-554515e-re3432", true, true));
-    account.setHolders(holders);
+    // Un cliente empresa puede crear 1 o muchas cuentas corrientes
+    var flux = Flux.merge(accountService.createNewAccount(customerCompanyId, AccountType.CURRENT))
+        .then(accountService.createNewAccount(customerCompanyId, AccountType.SAVING));
+    StepVerifier.create(flux).verifyComplete();
 
-    var savedAccount = accountService.save(account).block();
-    assertNotNull(savedAccount);
-  }
-  
-  @Test
-  void createCompanyWithMultipleCorrienteAccount() {
-    when(customerService.getCustomerTypeById("ee1234-554515e-re3432"))
-        .thenReturn(Mono.just(CustomerType.COMPANY));
-
-    var account = new Account();
-    account.setAccountNumber("3311114587123");
-    account.setState("ok");
-    account.setType("corriente");
-    var holders = List.of(new Holder("ee1234-554515e-re3432", true, true));
-    account.setHolders(holders);
-
-    var savedAccount = accountService.save(account).block();
-    assertNotNull(savedAccount);
-    
-    var account2 = new Account();
-    account2.setAccountNumber("3311114587123");
-    account2.setState("ok");
-    account2.setType("corriente");
-    var holders2 = List.of(new Holder("ee1234-554515e-re3432", true, true));
-    account2.setHolders(holders2);
-
-    var savedAccount2 = accountService.save(account2).block();
-    assertNotNull(savedAccount2);
+    // Un cliente persona si puede crear 1 cuenta corriente
+    var newAccountPerson = accountService.createNewAccount(customerPersonId, AccountType.CURRENT);
+    StepVerifier.create(newAccountPerson).verifyComplete();
   }
 
 }

@@ -11,4 +11,6 @@ public interface AccountRepository extends ReactiveMongoRepository<Account, Obje
   
   public Mono<Account> findByAccountNumber(String accountNumber);
 
+  public Mono<Account> findFirst1ByOrderByAccountNumber();
+
 }
