@@ -1,23 +1,16 @@
 package com.nttdata.passivesservice;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
-import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
-import com.nttdata.passivesservice.entity.Account;
-import com.nttdata.passivesservice.entity.Holder;
+import com.nttdata.passivesservice.common.AccountType;
 import com.nttdata.passivesservice.feign.CustomerService;
 import com.nttdata.passivesservice.feign.CustomerType;
 import com.nttdata.passivesservice.service.AccountService;
-import com.nttdata.passivesservice.service.AccountType;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -41,9 +34,16 @@ class AccountTests {
   void createFixedTermAccount() {
     var customerCompanyId = "C001";
     var customerPersonId = "N001";
+    var customerPersonId2 = "N002";
 
     when(customerService.getCustomerTypeById(customerCompanyId))
         .thenReturn(Mono.just(CustomerType.COMPANY));
+
+    when(customerService.getCustomerTypeById(customerPersonId))
+        .thenReturn(Mono.just(CustomerType.PERSONAL));
+
+    when(customerService.getCustomerTypeById(customerPersonId2))
+        .thenReturn(Mono.just(CustomerType.PERSONAL));
 
     // Un cliente empresa no puede crear cuentas de plazo fijo
     var mono = accountService.createNewAccount(customerCompanyId, AccountType.FIXED_TERM);
@@ -52,10 +52,22 @@ class AccountTests {
     // Un cliente persona si puede crear cuentas de plazo fijo
     var newAccountPerson =
         accountService.createNewAccount(customerPersonId, AccountType.FIXED_TERM);
-    StepVerifier.create(newAccountPerson).verifyComplete();
+    StepVerifier.create(newAccountPerson).assertNext(acc -> {
+    }).verifyComplete();
+
+    // Pero no puede crear mas de una cuenta de plazo fijo por el mismo cliente
+    var secondAccountPerson =
+        accountService.createNewAccount(customerPersonId, AccountType.FIXED_TERM);
+    StepVerifier.create(secondAccountPerson).expectError(RuntimeException.class).verify();
+
+    // Otro cliente nuevo si deberia poder generar su cuenta
+    var otherAccountPerson =
+        accountService.createNewAccount(customerPersonId2, AccountType.FIXED_TERM);
+    StepVerifier.create(otherAccountPerson).assertNext(acc -> {
+    }).verifyComplete();
   }
 
-  @Test
+  // @Test
   void createSavingAccount() {
     var customerCompanyId = "C001";
     var customerPersonId = "N001";
@@ -72,7 +84,7 @@ class AccountTests {
     StepVerifier.create(newAccountPerson).verifyComplete();
   }
 
-  @Test
+  // @Test
   void createCurrentAccount() {
     var customerCompanyId = "C001";
     var customerPersonId = "N001";

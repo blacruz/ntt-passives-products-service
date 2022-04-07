@@ -9,8 +9,8 @@ import reactor.core.publisher.Mono;
 @Repository
 public interface AccountRepository extends ReactiveMongoRepository<Account, ObjectId> {
   
-  public Mono<Account> findByAccountNumber(String accountNumber);
+  public Mono<Account> findByAccountNumber(Integer accountNumber);
 
-  public Mono<Account> findFirst1ByOrderByAccountNumber();
+  public Mono<Account> findFirst1ByOrderByAccountNumberDesc();
 
 }
