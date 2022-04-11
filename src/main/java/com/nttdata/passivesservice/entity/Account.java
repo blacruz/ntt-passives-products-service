@@ -23,7 +23,6 @@ public class Account {
   
   private Integer accountNumber;
   private AccountType type;
-  @DBRef private List<Movement> movements;
   private AccountState state;
   private List<Holder> holders;
   @DBRef private List<AuthSigner> authSigners;

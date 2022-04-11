@@ -67,7 +67,7 @@ class AccountTests {
     }).verifyComplete();
   }
 
-  // @Test
+   @Test
   void createSavingAccount() {
     var customerCompanyId = "C001";
     var customerPersonId = "N001";
@@ -84,7 +84,7 @@ class AccountTests {
     StepVerifier.create(newAccountPerson).verifyComplete();
   }
 
-  // @Test
+   @Test
   void createCurrentAccount() {
     var customerCompanyId = "C001";
     var customerPersonId = "N001";

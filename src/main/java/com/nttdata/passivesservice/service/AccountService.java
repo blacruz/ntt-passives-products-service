@@ -1,6 +1,7 @@
 package com.nttdata.passivesservice.service;
 
 import java.math.BigDecimal;
+import java.util.Date;
 import java.util.List;
 import java.util.function.Predicate;
 import org.slf4j.Logger;
@@ -11,10 +12,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import com.nttdata.passivesservice.common.AccountState;
 import com.nttdata.passivesservice.common.AccountType;
+import com.nttdata.passivesservice.dto.BalanceDto;
+import com.nttdata.passivesservice.dto.TransactionDto;
 import com.nttdata.passivesservice.entity.Account;
-import com.nttdata.passivesservice.entity.BalanceDTO;
 import com.nttdata.passivesservice.entity.Holder;
+import com.nttdata.passivesservice.entity.Transaction;
 import com.nttdata.passivesservice.repository.AccountRepository;
+import com.nttdata.passivesservice.repository.TransactionRepository;
+import com.nttdata.passivesservice.repository.TransactionRepositoryCustom;
 import com.nttdata.passivesservice.service.rules.AccountRule;
 import com.nttdata.passivesservice.service.rules.AccountValidator;
 import com.nttdata.passivesservice.service.rules.Rules;
@@ -29,9 +34,15 @@ public class AccountService {
 
   @Autowired
   private AccountRepository accountRepository;
+  
+  @Autowired
+  private TransactionRepository transactionRepository; 
 
   @Autowired
   private CustomerWebClient customerService;
+  
+  @Autowired
+  private TransactionRepositoryCustom transactionRepositoryCustom;
 
   private Mono<Account> validateAccountPersist(Account account) {
 
@@ -72,7 +83,7 @@ public class AccountService {
       })
       ;
 
-    return null;
+    return accountResult;
 //    var response =
 //        customerType.flatMap(type -> Flux.fromIterable().next().switchIfEmpty(Mono.just(account)))
 //            .flatMap(r -> Mono.error(new RuntimeException(r.getMsg())));
@@ -120,8 +131,33 @@ public class AccountService {
     return v;
   }
 
-  public Flux<BalanceDTO> balanceByCustomer(String customerId) {
-    return Flux.just(new BalanceDTO(AccountType.FIXED_TERM, new BigDecimal(1500)), new BalanceDTO(AccountType.SAVING, new BigDecimal(4000)));
+  public Flux<BalanceDto> balanceByCustomer(String customerId) {
+    var accountFilter = new Account();
+    var holder = new Holder(customerId, true, true);
+    accountFilter.setHolders(List.of(holder));
+    var example = Example.of(accountFilter);
+    var accounts = accountRepository.findAll(example)
+        .flatMap(acc -> transactionRepositoryCustom.getBalanceByAccounts(acc.getId()));
+    return accounts;
+  }
+
+  public Mono<String> createTransaction(TransactionDto dto) {
+    var depositCanNotNegative = (Predicate<TransactionDto>) obj -> obj.getType().getFactor() < 0 && obj.getAmount() > 0;
+    var withadrawCanNotPositive = (Predicate<TransactionDto>) obj -> obj.getType().getFactor() > 1 && obj.getAmount() < 0;
+    var txNoZeroAmoun = (Predicate<TransactionDto>) obj -> obj.getAmount() == 0;
+//    var withadrawLessEqToBalance = (Predicate<TransactionDto>) obj -> {
+//      transactionRepository
+//    };
+    
+    var transaction = new Transaction();
+    transaction.setAccountId(dto.getAccountId());
+    transaction.setDate(new Date());
+    transaction.setType(dto.getType());
+    transaction.setAmount(dto.getAmount());
+//    transaction.setFactor(dto.getType().getFactor());
+    transaction.setAgent(dto.getAgent());
+    var monoTx = transactionRepository.save(transaction);
+    return monoTx.map(tx -> tx.getAccountId());
   }
 
 }

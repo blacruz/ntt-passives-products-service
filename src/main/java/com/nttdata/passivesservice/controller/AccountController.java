@@ -6,9 +6,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.nttdata.passivesservice.dto.BalanceDto;
 import com.nttdata.passivesservice.dto.CreateAccountDto;
+import com.nttdata.passivesservice.dto.TransactionDto;
 import com.nttdata.passivesservice.entity.Account;
-import com.nttdata.passivesservice.entity.BalanceDTO;
 import com.nttdata.passivesservice.service.AccountService;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
@@ -28,9 +29,15 @@ public class AccountController {
   }
   
   @GetMapping("byCustomer/{customerId}/balance")
-  public Flux<BalanceDTO> balanceByCustomer(@PathVariable("customerId") String customerId) {
+  public Flux<BalanceDto> balanceByCustomer(@PathVariable("customerId") String customerId) {
     var flux = accountService.balanceByCustomer(customerId);
     return flux;
+  }
+  
+  @PostMapping("transaction/")
+  public Mono<String> createTransaction(@RequestBody TransactionDto dto) {
+    var mono = accountService.createTransaction(dto);
+    return mono;
   }
 
 }
