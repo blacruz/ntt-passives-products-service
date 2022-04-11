@@ -6,12 +6,16 @@ import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 import com.nttdata.passivesservice.common.AccountState;
 import com.nttdata.passivesservice.common.AccountType;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Document("Accounts")
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class Account {
   
   @Id

@@ -8,9 +8,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 import com.nttdata.passivesservice.common.AccountType;
-import com.nttdata.passivesservice.feign.CustomerService;
-import com.nttdata.passivesservice.feign.CustomerType;
 import com.nttdata.passivesservice.service.AccountService;
+import com.nttdata.passivesservice.service.CustomerType;
+import com.nttdata.passivesservice.webclient.CustomerWebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -23,7 +23,7 @@ class AccountTests {
   private AccountService accountService;
 
   @MockBean
-  private CustomerService customerService;
+  private CustomerWebClient customerService;
 
   @BeforeAll
   public static void setup() {
@@ -40,10 +40,10 @@ class AccountTests {
         .thenReturn(Mono.just(CustomerType.COMPANY));
 
     when(customerService.getCustomerTypeById(customerPersonId))
-        .thenReturn(Mono.just(CustomerType.PERSONAL));
+        .thenReturn(Mono.just(CustomerType.NATURAL));
 
     when(customerService.getCustomerTypeById(customerPersonId2))
-        .thenReturn(Mono.just(CustomerType.PERSONAL));
+        .thenReturn(Mono.just(CustomerType.NATURAL));
 
     // Un cliente empresa no puede crear cuentas de plazo fijo
     var mono = accountService.createNewAccount(customerCompanyId, AccountType.FIXED_TERM);

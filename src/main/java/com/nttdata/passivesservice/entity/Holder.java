@@ -10,9 +10,13 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class Holder {
-  
+
   private String customerId;
   private Boolean main;
   private Boolean active;
-  
+
+  public Holder(String customerId) {
+    this.customerId = customerId;
+  }
+
 }

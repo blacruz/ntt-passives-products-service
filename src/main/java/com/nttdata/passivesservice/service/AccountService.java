@@ -1,6 +1,10 @@
 package com.nttdata.passivesservice.service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,9 +15,12 @@ import com.nttdata.passivesservice.common.AccountState;
 import com.nttdata.passivesservice.common.AccountType;
 import com.nttdata.passivesservice.entity.Account;
 import com.nttdata.passivesservice.entity.Holder;
-import com.nttdata.passivesservice.feign.CustomerService;
-import com.nttdata.passivesservice.feign.CustomerType;
 import com.nttdata.passivesservice.repository.AccountRepository;
+import com.nttdata.passivesservice.service.rules.AccountRule;
+import com.nttdata.passivesservice.service.rules.AccountValidator;
+import com.nttdata.passivesservice.service.rules.Rules;
+import com.nttdata.passivesservice.webclient.CustomerWebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
@@ -25,38 +32,53 @@ public class AccountService {
   private AccountRepository accountRepository;
 
   @Autowired
-  private CustomerService customerService;
+  private CustomerWebClient customerService;
 
   private Mono<Account> validateAccountPersist(Account account) {
-    var holders = account.getHolders();
-    var mainHolder = holders.stream().filter(h -> h.getActive() && h.getMain()).findFirst().get();
+
+    List<Holder> holders = account.getHolders();
+    Holder mainHolder =
+        holders.stream().filter(h -> h.getActive() && h.getMain()).findFirst().get();
 
     if (CollectionUtils.isEmpty(holders))
       return Mono.error(new RuntimeException("Holders can not be empty"));
 
+    var validator = AccountValidator.empty
+        .and(AccountValidator.companyHasNotFixedTermAccount)
+        .and(AccountValidator.companyHasNotSavingAccount)
+        .and(accountRule -> {
+          
+          var filter = new Account();
+          filter.setType(account.getType());
+          filter.setHolders(List.of(new Holder(mainHolder.getCustomerId())));
 
+          var ruleSet = accountRepository.findAll(Example.of(filter)).count()
+              .map(count -> {
+                
+                var hasAccounts = (Predicate<AccountRule>) t -> count > 0;
+                
+                var rule = AccountValidator.rule(
+                    hasAccounts.and(AccountValidator.isNatural), 
+                    Rules.NATURAL_HAS_NOT_MORE_THAN_ONE_ACCOUNT_OF_SAME_TYPE);
+                
+                return rule.apply(accountRule);
+              });
+          return ruleSet.block();
+        });
+    
+    var accountResult = customerService.getCustomerTypeById(mainHolder.getCustomerId())
+      .map(customerType -> {
+        var validaciones = validator.apply(new AccountRule(account, customerType));
+        return account;
+      })
+      ;
 
-    return customerService.getCustomerTypeById(mainHolder.getCustomerId()).flatMap(customerType -> {
-      if (CustomerType.COMPANY == customerType && account.getType() == AccountType.FIXED_TERM) {
-        return Mono
-            .error(new RuntimeException("Company can not take account with fixed term type"));
-      }
-      if (CustomerType.COMPANY == customerType && account.getType() == AccountType.SAVING) {
-        return Mono.error(new RuntimeException("Company can not take account with Saving type"));
-      }
-      if (CustomerType.PERSONAL == customerType) {
-        var accountExample = Example.of(Account.builder().type(account.getType())
-            .holders(List.of(Holder.builder().customerId(mainHolder.getCustomerId()).build()))
-            .build());
-        return accountRepository.findAll(accountExample).hasElements()
-            .flatMap(hasElements -> hasElements
-                ? Mono.error(new RuntimeException(String.format(
-                    "Personal account can not has more 1 account type {0}", account.getType())))
-                : Mono.just(account));
-      }
-      return Mono.just(account);
-    });
-
+    return null;
+//    var response =
+//        customerType.flatMap(type -> Flux.fromIterable().next().switchIfEmpty(Mono.just(account)))
+//            .flatMap(r -> Mono.error(new RuntimeException(r.getMsg())));
+//
+//    return response;
 
   }
 
@@ -69,21 +91,34 @@ public class AccountService {
    */
   public Mono<Account> createNewAccount(String customerId, AccountType accountType) {
 
-    var holder = Holder.builder().customerId(customerId).active(true).main(true).build();
+    var holder = new Holder();
+    holder.setCustomerId(customerId);
+    holder.setActive(true);
+    holder.setMain(true);
 
-    var account =
-        Account.builder().holders(List.of(holder)).type(accountType).state(AccountState.OK).build();
+    var account = new Account();
+    account.setHolders(List.of(holder));
+    account.setType(accountType);
+    account.setState(AccountState.OK);
 
-    return validateAccountPersist(account).map(acc -> {
-      var lastAccountNumber = accountRepository.findFirst1ByOrderByAccountNumberDesc()
-          .defaultIfEmpty(Account.builder().accountNumber(0).build())
-          .map(lac -> lac.getAccountNumber()).block();
-      acc.setAccountNumber(lastAccountNumber + 1);
-      return acc;
-    }).flatMap(acc -> accountRepository.save(acc).map(savedAccount -> {
-      logger.info(String.format("Account created with id {0}", savedAccount.getId()));
-      return savedAccount;
-    }));
+    var v = validateAccountPersist(account);
+    
+    v.map(acc -> {
+      var x = accountRepository.findFirst1ByOrderByAccountNumberDesc()
+          .map(Account::getAccountNumber)
+          .defaultIfEmpty(0)
+          .map(lastNumber -> {
+            acc.setAccountNumber(lastNumber + 1);
+            var saved = accountRepository.save(acc);
+            var savedMapped = saved.map(savedAccount -> {
+              logger.info(String.format("Account created with id {0}", savedAccount.getId()));
+              return savedAccount;
+            });
+            return saved;
+          });
+      return x;
+    });
+    return v;
   }
 
 
