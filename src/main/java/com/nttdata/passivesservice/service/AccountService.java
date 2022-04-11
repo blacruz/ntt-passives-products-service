@@ -1,9 +1,7 @@
 package com.nttdata.passivesservice.service;
 
-import java.util.ArrayList;
+import java.math.BigDecimal;
 import java.util.List;
-import java.util.Set;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +12,7 @@ import org.springframework.util.CollectionUtils;
 import com.nttdata.passivesservice.common.AccountState;
 import com.nttdata.passivesservice.common.AccountType;
 import com.nttdata.passivesservice.entity.Account;
+import com.nttdata.passivesservice.entity.BalanceDTO;
 import com.nttdata.passivesservice.entity.Holder;
 import com.nttdata.passivesservice.repository.AccountRepository;
 import com.nttdata.passivesservice.service.rules.AccountRule;
@@ -121,6 +120,8 @@ public class AccountService {
     return v;
   }
 
-
+  public Flux<BalanceDTO> balanceByCustomer(String customerId) {
+    return Flux.just(new BalanceDTO(AccountType.FIXED_TERM, new BigDecimal(1500)), new BalanceDTO(AccountType.SAVING, new BigDecimal(4000)));
+  }
 
 }
