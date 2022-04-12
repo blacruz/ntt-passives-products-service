@@ -77,8 +77,20 @@ public class AccountService {
         });
     
     var accountResult = customerService.getCustomerTypeById(mainHolder.getCustomerId())
+        .switchIfEmpty(Mono.error(new RuntimeException("Customer not found")))
+        .handle((customerType, sink) -> {
+          var msg = new StringBuilder();
+          validator.apply(new AccountRule(account, customerType)).stream()
+              .forEach(val -> {
+                msg.append(val + "");
+              });
+          if (msg.length() > 0) {
+            sink.error(new RuntimeException(msg.toString()));
+          } else {
+            sink.next(customerType);
+          }
+        })
       .map(customerType -> {
-        var validaciones = validator.apply(new AccountRule(account, customerType));
         return account;
       })
       ;
@@ -110,25 +122,47 @@ public class AccountService {
     account.setHolders(List.of(holder));
     account.setType(accountType);
     account.setState(AccountState.OK);
-
-    var v = validateAccountPersist(account);
     
-    v.map(acc -> {
-      var x = accountRepository.findFirst1ByOrderByAccountNumberDesc()
-          .map(Account::getAccountNumber)
-          .defaultIfEmpty(0)
-          .map(lastNumber -> {
-            acc.setAccountNumber(lastNumber + 1);
-            var saved = accountRepository.save(acc);
-            var savedMapped = saved.map(savedAccount -> {
-              logger.info(String.format("Account created with id {0}", savedAccount.getId()));
-              return savedAccount;
-            });
-            return saved;
-          });
-      return x;
-    });
-    return v;
+    return validateAccountPersist(account)
+      .flatMap(acc -> {
+        
+        var accountDefaultZero = new Account();
+        accountDefaultZero.setAccountNumber(0);
+        
+        return accountRepository.findFirst1ByOrderByAccountNumberDesc()
+            .defaultIfEmpty(accountDefaultZero)
+            .map(accLn -> accLn.getAccountNumber() + 1)
+            .flatMap(newAccountNumber -> {
+              account.setAccountNumber(newAccountNumber);
+              return accountRepository.save(account)
+                  .map(accountSaved -> {
+                    logger.info(String.format("Account created with id {0}", accountSaved.getId()));
+                    return accountSaved;
+                  });
+            })
+            ;
+        
+      })
+      ;
+
+//    var v = validateAccountPersist(account);
+//    
+//    v.map(acc -> {
+//      var x = accountRepository.findFirst1ByOrderByAccountNumberDesc()
+//          .map(Account::getAccountNumber)
+//          .defaultIfEmpty(0)
+//          .map(lastNumber -> {
+//            acc.setAccountNumber(lastNumber + 1);
+//            var saved = accountRepository.save(acc);
+//            var savedMapped = saved.map(savedAccount -> {
+//              logger.info(String.format("Account created with id {0}", savedAccount.getId()));
+//              return savedAccount;
+//            });
+//            return saved;
+//          });
+//      return x;
+//    });
+//    return v;
   }
 
   public Flux<BalanceDto> balanceByCustomer(String customerId) {
